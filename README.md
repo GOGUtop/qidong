@@ -1,4 +1,4 @@
-# SillyTavern Launcher v0.2.0
+# SillyTavern Launcher v0.2.1
 
 **Android 10+ · Java · WebView · GitHub Actions 自动构建 Debug APK**
 
@@ -47,7 +47,7 @@
 1. 打开 https://github.com/new ，创建 `SillyTavern-Launcher` 仓库。
 2. 将本项目 ZIP **解压后**的文件上传到仓库根目录。请上传 `.github/workflows/build-apk.yml`，不要仅上传 ZIP 本身。
 3. 提交到 `main` 或 `master` 会自动触发工作流，也可在仓库 `Actions → Build Android APK → Run workflow` 手动启动。
-4. 成功后，打开该次运行，在页面底部 **Artifacts** 下载 `SillyTavernLauncher-v0.2-debug-APK`，解压得到 **`app-debug.apk`**。
+4. 成功后，打开该次运行，在页面底部 **Artifacts** 下载 `SillyTavernLauncher-v0.2.1-debug-APK`，解压得到 **`app-debug.apk`**。
 5. 将 APK 安装到 Android 10 及以上的手机即可。
 
 构建版本：Android Gradle Plugin **8.9.2**、Gradle **8.11.1**、Java **17**、compileSdk **35**、targetSdk **35**、AndroidX WebKit **1.14.0**。Actions 安装固定 Gradle 版本，不依赖本地 wrapper。
@@ -103,3 +103,38 @@ app/src/main/assets/
 已在当前环境进行 JavaScript 语法检查、Android XML 解析检查及事件监听模拟测试。**当前环境未预装 Android SDK/Gradle 且无法访问外网，尚未真正执行 `assembleDebug`，也没有实机验证**。首次 GitHub Actions 编译和安装后，请重点检查：①地址绑定；②通知栏进入设置/注销；③全屏退出路径；④保活开关及系统权限；⑤普通/流式回复提醒；⑥角色卡导入、聊天导出；⑦缓存清除前后保持登录。
 
 MIT License。非 SillyTavern 官方产品。
+
+
+## 2026-11 GitHub Actions SDK 修复
+
+如果旧版工作流在 `Setup Android SDK` 报错 `Failed to find package 'tools'`，
+原因是 `android-actions/setup-android@v3` 仍尝试安装已移除的旧 SDK `tools` 包。
+本工程已将其更新为 `android-actions/setup-android@v4`，并明确设置
+`packages: 'platform-tools'`。无需修改 App 功能代码，也无需安装本地 Android SDK。
+
+将包括隐藏 `.github` 文件夹在内的项目文件上传到 GitHub 仓库根目录，
+然后在 Actions 里重新运行 `Build Android APK`。
+如果 SDK 安装通过但后续 Java 编译出现新报错，请提供该步骤日志。
+
+
+## 2026-11-12 SDK 旧 tools 包错误修复
+
+本版本 `.github/workflows/build-apk.yml` 不再使用 `android-actions/setup-android`，直接调用 GitHub `ubuntu-24.04` 运行器内置 SDK 的 `sdkmanager`，明确安装 `platform-tools`、`platforms;android-35`、`build-tools;35.0.0`，不会执行 `sdkmanager tools`。
+
+上传文件以后请在 GitHub 仓库提交新的 commit（确认根目录 `.github/workflows/build-apk.yml` 已被覆盖），到 **Actions > Build Android APK (SDK bypass fix)** 查看新运行记录。不要对以前失败记录点 **Re-run jobs**，它仍使用原始提交。首次运行可在 Actions 中选择 **Run workflow**。
+
+本地只验证了工作流 YAML 格式及项目资源文件，GitHub 上最终编译需以 Actions 运行结果为准。
+
+
+## v0.2.1：HTTP 酒馆连接修复
+
+上一版对未写 `http://` 的公共域名会自动补为 `https://`。本版改成：
+
+- 输入 `http://example.com:8000`：原样使用 HTTP，**绝不自动转换成 HTTPS**。
+- 输入 `example.com:8000`（省略协议）：默认 `http://example.com:8000`。
+- 输入 `https://example.com`：原样使用 HTTPS，绝不自动降级。
+- Manifest 保留 `usesCleartextTraffic=true`，并新增 `res/xml/network_security_config.xml`，显式允许用户配置的 HTTP 站点使用明文通信。因地址可为任何域名/IP，无法事先限定域名，请仅绑定可信来源。
+- **已绑定旧的 HTTPS 地址？** 进入通知栏 → 软件设置，当前网站区域点击「当前网站只支持 HTTP？点击切换」并确认，就会把已有 HTTPS 地址改成 HTTP 并保存。也可以注销绑定，重新输入完整的 `http://` 地址。
+- 如果明确输入 HTTP 后网页仍跳转至 HTTPS，则可能是服务器/反向代理发出的重定向，或者浏览器缓存的 HSTS 规则。这种情况需检查酒馆站点配置；启动器不会绕过服务器重定向或证书校验。
+- `http://` 不是加密协议，不建议在公网直接发送角色聊天内容、Cookie 或登录凭据。优先使用 HTTPS 或受信任的 VPN。
+- 修复包含在 `.github/workflows/build-apk.yml` 中，继续使用绕过旧版 SDK `tools` 的工作流。

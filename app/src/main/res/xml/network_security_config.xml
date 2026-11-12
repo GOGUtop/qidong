@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- User-configured SillyTavern hosts can be on HTTP at any domain/IP.
+     Never transmit credentials over untrusted networks. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

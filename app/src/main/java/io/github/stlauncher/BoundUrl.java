@@ -10,14 +10,10 @@ final class BoundUrl {
     static String normalize(String input) {
         String value = input == null ? "" : input.trim();
         if (value.isEmpty()) throw new IllegalArgumentException("请填写酒馆网站地址");
+        // For a user-configured SillyTavern endpoint, never silently upgrade to HTTPS.
+        // A missing scheme defaults to HTTP; explicit https:// is preserved unchanged.
         if (!value.contains("://")) {
-            String lower = value.toLowerCase(Locale.ROOT);
-            boolean local = lower.startsWith("localhost") || lower.startsWith("127.")
-                    || lower.startsWith("10.") || lower.startsWith("192.168.")
-                    || lower.matches("^172\\.(1[6-9]|2[0-9]|3[01])\\..*")
-                    || lower.startsWith("[::1]")
-                    || lower.matches("^[^/:]+\\.local(?::.*|/.*|$)");
-            value = (local ? "http://" : "https://") + value;
+            value = "http://" + value;
         }
         try {
             URI uri = new URI(value);

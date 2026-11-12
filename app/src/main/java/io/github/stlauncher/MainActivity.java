@@ -204,13 +204,13 @@ public final class MainActivity extends Activity {
         TextView label = text("酒馆服务器地址", 19, WHITE, true);
         label.setPadding(0, dp(12), 0, dp(5));
         card.addView(label);
-        card.addView(text("HTTPS / 局域网 HTTP 均可", 12, MUTED, false));
+        card.addView(text("支持 HTTP / HTTPS；省略协议时默认 HTTP", 12, MUTED, false));
 
         EditText field = new EditText(this);
         field.setTextSize(14);
         field.setTextColor(WHITE);
         field.setHintTextColor(MUTED);
-        field.setHint("http://192.168.1.5:8000");
+        field.setHint("http://你的酒馆域名:8000");
         field.setSingleLine(true);
         field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         field.setImeOptions(EditorInfo.IME_ACTION_GO);
@@ -506,6 +506,13 @@ public final class MainActivity extends Activity {
         address.setMaxLines(2);
         address.setEllipsize(TextUtils.TruncateAt.MIDDLE);
         boundCard.addView(address);
+        if (boundUrl.regionMatches(true, 0, "https://", 0, 8)) {
+            TextView useHttp = outlinedButton("当前网站只支持 HTTP？点击切换  →");
+            LinearLayout.LayoutParams useHttpLp = new LinearLayout.LayoutParams(-1, dp(46));
+            useHttpLp.topMargin = dp(12);
+            boundCard.addView(useHttp, useHttpLp);
+            useHttp.setOnClickListener(v -> confirmSwitchToHttp());
+        }
 
         section(content, "DISPLAY", "显示与沉浸", 20);
         LinearLayout display = card(content, 10);
@@ -592,7 +599,7 @@ public final class MainActivity extends Activity {
         unbindLp.topMargin = dp(12);
         content.addView(unbind, unbindLp);
         unbind.setOnClickListener(v -> confirmUnbind());
-        TextView foot = text("LAUNCHER  v0.2.0   •   非官方 SillyTavern 客户端", 11, MUTED, false);
+        TextView foot = text("LAUNCHER  v0.2.1   •   非官方 SillyTavern 客户端", 11, MUTED, false);
         foot.setGravity(Gravity.CENTER);
         foot.setPadding(0, dp(32), 0, dp(8));
         content.addView(foot);
@@ -808,6 +815,23 @@ public final class MainActivity extends Activity {
         } else if (ACTION_OPEN_SETTINGS.equals(action)) {
             new Handler(Looper.getMainLooper()).post(this::showSettingsScreen);
         }
+    }
+
+    /** Explicitly switch old HTTPS bindings to HTTP. Never downgrade silently. */
+    private void confirmSwitchToHttp() {
+        if (boundUrl == null || !boundUrl.regionMatches(true, 0, "https://", 0, 8)) return;
+        final String newUrl = BoundUrl.normalize("http://" + boundUrl.substring(8));
+        new AlertDialog.Builder(this)
+                .setTitle("使用 HTTP 打开酒馆？")
+                .setMessage("将地址改为：\n" + newUrl +
+                        "\n\nHTTP 连接不加密，仅在可信的网络或 VPN 中使用。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("切换为 HTTP", (dialog, which) -> {
+                    boundUrl = newUrl;
+                    LauncherOptions.prefs(this).edit().putString(KEY_URL, newUrl).apply();
+                    showWebScreen();
+                    NotificationHelper.show(this);
+                }).show();
     }
 
     private void confirmUnbind() {
