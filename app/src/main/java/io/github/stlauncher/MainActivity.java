@@ -1,6 +1,8 @@
 package io.github.stlauncher;
 
 import android.Manifest;
+import android.app.DownloadManager;
+import android.view.DisplayCutout;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
@@ -72,12 +74,12 @@ public final class MainActivity extends Activity {
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1202;
 
     // Gaming-inspired navy / charcoal surface colors, with restrained yellow accents.
-    private static final int BACKGROUND = Color.rgb(8, 13, 25);
-    private static final int PANEL = Color.rgb(23, 30, 45);
-    private static final int PANEL_LIGHT = Color.rgb(31, 39, 56);
-    private static final int OUTLINE = Color.rgb(48, 57, 75);
+    private static final int BACKGROUND = Color.rgb(7, 12, 23);
+    private static final int PANEL = Color.rgb(19, 28, 42);
+    private static final int PANEL_LIGHT = Color.rgb(29, 39, 58);
+    private static final int OUTLINE = Color.rgb(42, 54, 73);
     private static final int ACCENT = Color.rgb(255, 212, 59);
-    private static final int MUTED = Color.rgb(146, 156, 175);
+    private static final int MUTED = Color.rgb(149, 162, 181);
     private static final int WHITE = Color.rgb(241, 244, 249);
 
     private FrameLayout host;
@@ -98,6 +100,10 @@ public final class MainActivity extends Activity {
         getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         getWindow().setStatusBarColor(BACKGROUND);
         getWindow().setNavigationBarColor(BACKGROUND);
+        if (Build.VERSION.SDK_INT >= 30) {
+            // Own the insets on Android 11+, including Android 15 mandatory edge-to-edge.
+            getWindow().setDecorFitsSystemWindows(false);
+        }
 
         host = new FrameLayout(this);
         host.setBackgroundColor(BACKGROUND);
@@ -121,19 +127,35 @@ public final class MainActivity extends Activity {
     }
 
     private void configureInsets() {
-        // Android 15+ enforces edge-to-edge. Insets belong to the container, never
-        // to the WebView itself, so changing fullscreen does not reload the page.
-        if (Build.VERSION.SDK_INT >= 35) {
+        // Full screen must NOT mean drawing important web controls under a
+        // punch-hole camera. Reserve the stable top inset even when the status
+        // bar is hidden; compute cutout and keyboard insets on every update.
+        if (Build.VERSION.SDK_INT >= 30) {
             host.setOnApplyWindowInsetsListener((view, insets) -> {
-                Insets bars = insets.getInsets(WindowInsets.Type.systemBars()
-                        | WindowInsets.Type.displayCutout());
+                Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                Insets stableStatus = insets.getInsetsIgnoringVisibility(
+                        WindowInsets.Type.statusBars());
                 Insets keyboard = insets.getInsets(WindowInsets.Type.ime());
-                boolean full = fullscreenWeb();
-                host.setPadding(bars.left, full ? 0 : bars.top, bars.right,
-                        Math.max(full ? 0 : bars.bottom, keyboard.bottom));
+                DisplayCutout displayCutout = insets.getDisplayCutout();
+                int cutTop = displayCutout == null ? 0 : displayCutout.getSafeInsetTop();
+                int cutLeft = displayCutout == null ? 0 : displayCutout.getSafeInsetLeft();
+                int cutRight = displayCutout == null ? 0 : displayCutout.getSafeInsetRight();
+                int cutBottom = displayCutout == null ? 0 : displayCutout.getSafeInsetBottom();
+                int top = fullscreenWeb()
+                        ? Math.max(stableStatus.top, cutTop)
+                        : Math.max(bars.top, cutTop);
+                host.setPadding(Math.max(bars.left, cutLeft), top,
+                        Math.max(bars.right, cutRight),
+                        Math.max(Math.max(bars.bottom, cutBottom), keyboard.bottom));
                 return insets;
             });
             host.requestApplyInsets();
+        } else {
+            // Android 10 uses the system's native display-cutout avoidance.
+            android.view.WindowManager.LayoutParams attributes = getWindow().getAttributes();
+            attributes.layoutInDisplayCutoutMode =
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
+            getWindow().setAttributes(attributes);
         }
     }
 
@@ -163,7 +185,7 @@ public final class MainActivity extends Activity {
                       | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     : 0);
         }
-        if (Build.VERSION.SDK_INT >= 35) host.requestApplyInsets();
+        if (Build.VERSION.SDK_INT >= 30) host.requestApplyInsets();
     }
 
     private void showBindingScreen() {
@@ -186,11 +208,11 @@ public final class MainActivity extends Activity {
         column.addView(overline);
         TextView icon = text("ST", 25, ACCENT, true);
         icon.setGravity(Gravity.CENTER);
-        icon.setBackground(rounded(PANEL_LIGHT, 23, OUTLINE));
+        icon.setBackground(highlightCard(22));
         LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(72), dp(72));
         iconLp.topMargin = dp(36);
         column.addView(icon, iconLp);
-        TextView heading = text("你的酒馆，\n即刻开启。", 31, WHITE, true);
+        TextView heading = text("你的酒馆，\n即刻开启。", 34, WHITE, true);
         heading.setLineSpacing(dp(3), 1f);
         LinearLayout.LayoutParams headingLp = new LinearLayout.LayoutParams(-1, -2);
         headingLp.topMargin = dp(24);
@@ -200,7 +222,7 @@ public final class MainActivity extends Activity {
         column.addView(subtitle);
 
         LinearLayout card = card(column, 35);
-        card.addView(text("CONNECT YOUR TAVERN", 11, ACCENT, true));
+        card.addView(text("01  /  CONNECT YOUR TAVERN", 11, ACCENT, true));
         TextView label = text("酒馆服务器地址", 19, WHITE, true);
         label.setPadding(0, dp(12), 0, dp(5));
         card.addView(label);
@@ -221,7 +243,7 @@ public final class MainActivity extends Activity {
         fieldLp.topMargin = dp(20);
         card.addView(field, fieldLp);
 
-        Button bindButton = yellowButton("绑定并进入酒馆  →");
+        Button bindButton = yellowButton("绑定酒馆 · 开始冒险  →");
         LinearLayout.LayoutParams bindLp = new LinearLayout.LayoutParams(-1, dp(52));
         bindLp.topMargin = dp(18);
         card.addView(bindButton, bindLp);
@@ -414,7 +436,8 @@ public final class MainActivity extends Activity {
                     webView.evaluateJavascript("(function(){var a=document.createElement('a');" +
                             "a.href=" + JSONObject.quote(url) + ";a.download='';a.click();})()", null);
                 } else toast("请更新 Android System WebView 以支持文件导出");
-            } else DownloadHandler.download(this, url, userAgent, disposition, mime);
+            } else DownloadHandler.download(this, url, userAgent, disposition, mime,
+                    webView == null ? boundUrl : webView.getUrl());
         });
         webView.loadUrl(boundUrl);
         applyFullscreen();
@@ -484,26 +507,39 @@ public final class MainActivity extends Activity {
         nav.setPadding(dp(14), 0, 0, 0);
         top.addView(nav);
 
-        TextView kicker = text("SILLYTAVERN  /  LAUNCHER", 11, ACCENT, true);
-        kicker.setLetterSpacing(.13f);
-        LinearLayout.LayoutParams kickerLp = new LinearLayout.LayoutParams(-1, -2);
-        kickerLp.topMargin = dp(27);
-        content.addView(kicker, kickerLp);
-        TextView mainTitle = text("酒馆控制中心", 29, WHITE, true);
-        LinearLayout.LayoutParams mainLp = new LinearLayout.LayoutParams(-1, -2);
-        mainLp.topMargin = dp(9);
-        content.addView(mainTitle, mainLp);
-        TextView subtitle = text("按照你的使用习惯，自由配置酒馆体验。", 13, MUTED, false);
-        subtitle.setPadding(0, dp(7), 0, 0);
-        content.addView(subtitle);
+        LinearLayout hero = vertical();
+        hero.setPadding(dp(20), dp(23), dp(20), dp(23));
+        hero.setBackground(highlightCard(21));
+        LinearLayout.LayoutParams heroLp = new LinearLayout.LayoutParams(-1, -2);
+        heroLp.topMargin = dp(22);
+        content.addView(hero, heroLp);
+        TextView kicker = text("SILLYTAVERN  /  MOBILE CONSOLE", 10, ACCENT, true);
+        kicker.setLetterSpacing(.17f);
+        hero.addView(kicker);
+        TextView mainTitle = text("酒馆控制中心", 28, WHITE, true);
+        mainTitle.setPadding(0, dp(12), 0, 0);
+        hero.addView(mainTitle);
+        TextView subtitle = text("沉浸式阅读 · 文件管理 · 后台提醒", 13, MUTED, false);
+        subtitle.setPadding(0, dp(8), 0, 0);
+        hero.addView(subtitle);
+        TextView version = text("VERSION  0.3.0      •      CUSTOM WEBVIEW", 10, ACCENT, true);
+        version.setPadding(0, dp(22), 0, 0);
+        hero.addView(version);
 
-        LinearLayout boundCard = card(content, 24);
-        boundCard.addView(text("CURRENT SESSION", 10, ACCENT, true));
-        TextView boundTitle = text("●  已连接酒馆", 16, WHITE, true);
-        boundTitle.setPadding(0, dp(10), 0, dp(7));
-        boundCard.addView(boundTitle);
-        TextView address = text(boundUrl, 12, MUTED, false);
+        LinearLayout boundCard = card(content, 14);
+        LinearLayout status = new LinearLayout(this);
+        status.setGravity(Gravity.CENTER_VERTICAL);
+        boundCard.addView(status);
+        TextView boundTitle = text("●  已绑定酒馆", 15, WHITE, true);
+        status.addView(boundTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView protocol = text(boundUrl.startsWith("https://") ? "HTTPS" : "HTTP", 11,
+                boundUrl.startsWith("https://") ? Color.rgb(129, 225, 176) : ACCENT, true);
+        protocol.setPadding(dp(10), dp(5), dp(10), dp(5));
+        protocol.setBackground(rounded(PANEL_LIGHT, 10, OUTLINE));
+        status.addView(protocol);
+        TextView address = text(boundUrl, 13, MUTED, false);
         address.setMaxLines(2);
+        address.setPadding(0, dp(10), 0, 0);
         address.setEllipsize(TextUtils.TruncateAt.MIDDLE);
         boundCard.addView(address);
         if (boundUrl.regionMatches(true, 0, "https://", 0, 8)) {
@@ -516,12 +552,12 @@ public final class MainActivity extends Activity {
 
         section(content, "DISPLAY", "显示与沉浸", 20);
         LinearLayout display = card(content, 10);
-        toggleRow(display, "全屏沉浸模式", "隐藏系统状态栏、导航栏与顶部工具栏，滑动顶部可临时呼出系统栏。",
+        toggleRow(display, "全屏沉浸模式", "隐藏启动器工具栏与系统栏；为挖孔摄像头保留安全区域。",
                 LauncherOptions.FULL_SCREEN, () -> applyFullscreen());
 
         section(content, "BACKGROUND", "后台与运行", 22);
         LinearLayout keepCard = card(content, 10);
-        toggleRow(keepCard, "增强后台保活", "用户开启前台服务并保留状态通知；降低被回收概率，但不能保证一直存活。",
+        toggleRow(keepCard, "增强后台保活", "开启前台服务及持续通知，提高进程存活优先级；不保证后台生成不断线。",
                 LauncherOptions.KEEP_ALIVE, () -> {
                     if (LauncherOptions.enabled(this, LauncherOptions.KEEP_ALIVE)) startSessionService();
                     else stopSessionService();
@@ -535,8 +571,8 @@ public final class MainActivity extends Activity {
             try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); }
             catch (Exception e) { openAppInfo(); }
         });
-        TextView keepNote = text("说明：系统省电、厂商后台限制和 WebView 冻结仍可能中断生成。" +
-                "仅在需要时开启，以降低耗电。", 11, MUTED, false);
+        TextView keepNote = text("工作方式：只保留 App 进程的较高优先级，不接管酒馆 API、" +
+                "不维持独立网络连接。锁屏、省电模式、厂商限制可能暂停网页生成或通知。", 11, MUTED, false);
         keepNote.setPadding(0, dp(12), 0, 0);
         keepNote.setLineSpacing(dp(3), 1f);
         keepCard.addView(keepNote);
@@ -571,6 +607,36 @@ public final class MainActivity extends Activity {
                     }
                 });
 
+        section(content, "FILE ENGINE", "文件与导入导出", 22);
+        LinearLayout files = card(content, 10);
+        files.addView(text("支持角色卡、预设与聊天文件的常规系统选择器导入；" +
+                "HTTP 文件下载和网页 Blob 导出分别处理。酒馆内的删除操作仍由网站执行。", 12,
+                MUTED, false));
+        TextView testExport = outlinedButton("测试导出 · 保存一个 TXT 文件  →");
+        LinearLayout.LayoutParams testLp = new LinearLayout.LayoutParams(-1, dp(48));
+        testLp.topMargin = dp(16);
+        files.addView(testExport, testLp);
+        testExport.setOnClickListener(v -> {
+            if (webView == null) { toast("酒馆页面尚未打开"); return; }
+            injectScript(webView, "blob_export.js");
+            webView.evaluateJavascript("(function(){if(typeof window.__stLauncherTestExport===" +
+                    "'function'){window.__stLauncherTestExport()}else{alert('原生导出接口未连接，" +
+                    "请刷新酒馆重试')}})()", null);
+        });
+        TextView downloads = outlinedButton("打开系统下载列表  ↗");
+        LinearLayout.LayoutParams dlLp = new LinearLayout.LayoutParams(-1, dp(48));
+        dlLp.topMargin = dp(10);
+        files.addView(downloads, dlLp);
+        downloads.setOnClickListener(v -> {
+            try { startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)); }
+            catch (Exception e) { toast("可在文件管理器 → 下载 → SillyTavern 查看文件"); }
+        });
+        TextView fileNote = text("导出位置：下载 / SillyTavern。测试文件可验证" +
+                " WebView → Android 存储链路；部分第三方插件采用非标准导出方式，仍可能不兼容。", 11,
+                MUTED, false);
+        fileNote.setPadding(0, dp(13), 0, 0);
+        files.addView(fileNote);
+
         section(content, "STORAGE", "缓存管理", 22);
         LinearLayout storage = card(content, 10);
         toggleRow(storage, "退出时自动清除网页缓存", "通过 App 的“退出应用”结束时清理缓存；保留 Cookie、登录状态及本地网站数据。",
@@ -599,7 +665,7 @@ public final class MainActivity extends Activity {
         unbindLp.topMargin = dp(12);
         content.addView(unbind, unbindLp);
         unbind.setOnClickListener(v -> confirmUnbind());
-        TextView foot = text("LAUNCHER  v0.2.1   •   非官方 SillyTavern 客户端", 11, MUTED, false);
+        TextView foot = text("ST LAUNCHER  v0.3.0   •   非官方 SillyTavern 启动器", 11, MUTED, false);
         foot.setGravity(Gravity.CENTER);
         foot.setPadding(0, dp(32), 0, dp(8));
         content.addView(foot);
@@ -622,7 +688,7 @@ public final class MainActivity extends Activity {
         lp.topMargin = dp(marginTop);
         parent.addView(block, lp);
         TextView english = text(overline, 10, ACCENT, true);
-        english.setLetterSpacing(.12f);
+        english.setLetterSpacing(.17f);
         block.addView(english);
         TextView heading = text(label, 17, WHITE, true);
         heading.setPadding(0, dp(6), 0, 0);
@@ -674,7 +740,7 @@ public final class MainActivity extends Activity {
     private LinearLayout card(LinearLayout parent, int marginTop) {
         LinearLayout card = vertical();
         card.setPadding(dp(18), dp(18), dp(18), dp(18));
-        card.setBackground(rounded(PANEL, 19, OUTLINE));
+        card.setBackground(rounded(PANEL, 18, OUTLINE));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(marginTop);
         parent.addView(card, lp);
@@ -702,7 +768,7 @@ public final class MainActivity extends Activity {
         button.setAllCaps(false);
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         button.setTextColor(BACKGROUND);
-        button.setBackground(rounded(ACCENT, 12, 0));
+        button.setBackground(rounded(ACCENT, 13, 0));
         return button;
     }
 
@@ -720,6 +786,15 @@ public final class MainActivity extends Activity {
         view.setTextColor(color);
         if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         return view;
+    }
+
+    private GradientDrawable highlightCard(int radius) {
+        GradientDrawable gradient = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(36, 47, 76), Color.rgb(20, 30, 48), Color.rgb(14, 22, 35)});
+        gradient.setCornerRadius(dp(radius));
+        gradient.setStroke(dp(1), Color.rgb(65, 74, 100));
+        return gradient;
     }
 
     private GradientDrawable rounded(int color, int radius, int stroke) {
@@ -874,7 +949,11 @@ public final class MainActivity extends Activity {
 
     @Override protected void onPause() {
         isVisible = false;
-        if (webView != null) webView.onPause();
+        // In opt-in foreground-session mode leave the WebView resumed while the
+        // Activity is backgrounded. No promise: OS/Chromium may still throttle it.
+        if (webView != null && !LauncherOptions.enabled(this, LauncherOptions.KEEP_ALIVE)) {
+            webView.onPause();
+        }
         super.onPause();
     }
 

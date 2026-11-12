@@ -1,140 +1,88 @@
-# SillyTavern Launcher v0.2.1
+# SillyTavern Launcher v0.3.0
 
-**Android 10+ · Java · WebView · GitHub Actions 自动构建 Debug APK**
+非官方 Android 10+ SillyTavern 网页启动器，Java + Android System WebView，**不包含 SillyTavern 服务端**。首启绑定 HTTP/HTTPS 酒馆网站；以后打开 App 直接进入该地址。使用 GitHub Actions 构建 Debug APK。
 
-一个第三方、非官方的 SillyTavern Android 网页启动器：第一次绑定酒馆 URL，之后自动进入绑定的酒馆；保留上一版网页导入/导出/下载，并加入深色电竞风设置界面及可调功能。
+> 本版针对实机反馈的「保存文件失败：Failed to fetch」及挖孔屏顶部遮挡改进。**已运行本地 JavaScript 模拟测试，但没有在本环境实际编译 Android APK 或验证你的酒馆插件；对于某些非标准导出方式无法保证完全兼容。**
 
-> 本工程是源码原型，尚未在真实设备上构建或验证所有酒馆扩展。**并不包含、运行或托管 SillyTavern 服务端。**
+## 新功能 / 修复
 
-## v0.2 新增
+| 功能 | v0.3 行为 |
+|---|---|
+| HTTP / HTTPS | 保持明确指定的协议；未写协议时默认 HTTP；网络安全配置允许 HTTP。 |
+| 顶部挖孔屏适配 | Android 11+ 全屏时依据 WindowInsets（稳定状态栏高度 + DisplayCutout 安全区）预留顶部距离；Android 10 采用系统避让策略；设置页正常显示系统栏。 |
+| 常见 Blob 导出 | 优先捕获 `URL.createObjectURL(blob)` 中真实的 Blob 对象，因而不依赖随后可能被撤销的 `blob:` URL。兼容 `<a download>.click()` 和 DOM 点击，保留 `fetch(blobURL)` 兜底。 |
+| `data:` 文件导出 | 本地解码 base64 或 percent-encoded data URI，交给安卓文件写入桥接。 |
+| 大文件导出 | 48 KiB 分块经 AndroidX WebMessage 传输；MediaStore 写入由单线程任务执行，不在 UI 线程做磁盘 I/O；单文件上限 1 GiB。 |
+| 文件下载 | HTTP(S) URL 交给 Android DownloadManager，附加当前 URL 的 Cookie / User-Agent 和同源 Referer（不会向其他来源发送当前聊天地址）。 |
+| 文件导入 | WebChromeClient 文件选择器调用 Android 文件管理器，并将允许的 `content://` URI 返回给 WebView。支持网页请求的多个文件。 |
+| 删除 | 保留网页原生的角色、预设、聊天等删除操作；启动器不单独删除服务器数据。 |
+| 文件诊断 | 设置 → 文件与导入导出 → **测试导出**，能生成 `ST-Launcher-export-test.txt`，检查 Android 原生导出桥是否可用；另有“打开系统下载列表”。 |
+| UI | 统一深夜蓝、深灰渐变卡片、黄色重点按钮；增强绑定页、设置页标题区、HTTP/HTTPS 状态标记和文件管理入口。 |
 
-| 功能 | 设置入口 | 默认状态 | 实际行为 |
-|---|---|---|---|
-| 全屏沉浸模式 | 显示与沉浸 | 关 | 酒馆页隐藏顶部工具栏及 Android 系统栏；从屏幕上缘滑动可临时显示状态栏 |
-| 增强后台保活 | 后台与运行 | 关 | 由用户显式开启前台服务，显示状态通知；同时提供系统电池优化设置入口。**不能保证 WebView 永不冻结/进程永不退出。** |
-| 回复完成提醒 | 回复完成提醒 | 关 | 监听 SillyTavern `GENERATION_STARTED`、`MESSAGE_RECEIVED`、`GENERATION_ENDED`（或角色消息渲染事件）；用户主动停止生成不提醒。**生成异常、第三方扩展和不兼容版本可能影响判断。** |
-| 提示音 | 回复完成提醒 | 开（仅当总开关打开时生效） | 前台本地播放系统提示音；后台依赖通知渠道和通知权限 |
-| 震动 | 回复完成提醒 | 关 | 前台振动一次；后台依赖通知渠道和通知权限 |
-| 禁用 Android 原生文字工具栏 | 输入与交互 | 关 | 抑制 WebView 的原生复制、粘贴、全选浮动工具栏；可能同时影响聊天输入框内的这些操作，不影响酒馆自身的自定义菜单 |
-| 退出时自动清缓存 | 缓存管理 | 关 | 使用菜单的「退出应用」结束 Activity 时清理 **WebView 网页资源缓存**，不清 Cookie / localStorage / 服务器聊天数据；系统强杀进程时不能保证触发 |
-| 立即清理网页缓存 | 缓存管理 | 手动操作 | 立即 `WebView.clearCache(true)`；**不等于清除全部浏览数据** |
+## 安装、更新与自动编译
 
-### 通知栏快捷操作
+1. 下载项目 ZIP，**解压**，将里面所有项目文件（包含隐藏的 `.github` 目录）上传到 GitHub 仓库根目录，覆盖旧版。
+2. Commit 至 `main` 或 `master`，打开仓库 **Actions → Build Android APK (v0.3)**，选择这次**新提交**对应的运行（不要在旧失败任务上使用 Re-run jobs）。
+3. 依次应经过 `Install Android SDK 35 (no deprecated tools)`、`Test WebView JavaScript and native export protocol`、`Compile installable debug APK`。
+4. 成功后在 **Artifacts** 下载 `SillyTavernLauncher-v0.3.0-debug-APK`，解压获得 `app-debug.apk`。
 
-已绑定酒馆时，通知提供 **软件设置** 和 **注销绑定** 两个操作。点击「软件设置」进入新设置界面，点击「注销绑定」二次确认后返回 URL 绑定页。
+工程使用 JDK 17、Android Gradle Plugin 8.9.2、Gradle 8.11.1、compileSdk / targetSdk 35、AndroidX WebKit 1.14.0，最低 API 29（Android 10）。工作流绕过旧版 SDK `tools` 安装故障。
 
-> Android 13+ 要求通知授权，Android 14+ 及部分厂商 ROM 允许划掉或隐藏持续通知，**不能保证通知永远钉住**。仍可从 App 顶部 `⋮ → 软件设置` 进入设置。全屏模式下，滑动顶部唤出通知栏；如果通知被禁用，在酒馆首页（WebView 无可返回历史）按系统返回键也可打开设置。
+### APK 更新提醒
 
-### 界面设计
+GitHub Actions Debug APK 的签名可能因运行器变化而不同。出现“不能覆盖安装”并非代码问题，需要正式配置稳定签名的 Release APK 才可确保持续无损更新。卸载后再装会移除 Android 应用内部网站 Cookie / 本地数据；**先按酒馆本身的流程备份重要资料**，尤其是浏览器本地存储的内容。服务器存储的数据通常不因卸载启动器而删除。
 
-采用参考图风格的深夜蓝 `#080D19`、深灰卡片 `#171E2D`、黄金高亮 `#FFD43B`：顶部英文小标签、粗体中文标题、圆角分组卡片、独立黄色开关、低干扰辅助文字。酒馆网页保留原本的 SillyTavern UI，不强行注入网站 CSS。
+## 导入、下载、导出和删除如何工作
 
-## 首次连接和数据兼容
+- **导入：** 酒馆网页发起 `<input type=file>`，启动器让系统文件选择器返回一个或多个 `content://` 文件 URI。该流程不把文件传到启动器作者服务器。
+- **普通下载：** HTTP(S) 文件链接进入 Android 系统下载队列；使用当前下载 URL 所属站点的 Cookie，保存到公共 `下载/SillyTavern/`，文件名加时间前缀避免冲突。某些要求 POST / CSRF token / ServiceWorker 鉴权的插件下载仍可能需要另外适配。
+- **Blob 导出：** 酒馆网页在主框架中创建的 File/Blob，经 `URL.createObjectURL` 被拦截并保存 Blob **对象引用**，因此即便插件随即调用 `URL.revokeObjectURL`，仍能导出。按块发送给安卓的 MediaStore，保存到 `下载/SillyTavern/`，导出成功后显示 Toast。
+- **Data URI 导出：** 支持常见 Base64 / URL 编码文件；大体量 data URI 自身会占内存。
+- **删除：** 由酒馆网站页面上的确认弹窗和网络请求执行。启动器不会绕过确认，也不会通过“清缓存”删除服务器聊天或角色。
 
-- 输入 HTTP / HTTPS 地址，例如 `http://192.168.1.5:8000`，点击「绑定并进入酒馆」。地址保存在 `SharedPreferences`，下次自动打开。
-- 安卓手机中的 `127.0.0.1` 指的是**手机本机**。如果 SillyTavern 在电脑运行，要用电脑的局域网 IP、HTTPS 反向代理地址或 VPN 地址。
-- 保留上一版网页文件功能：原生文件选择器导入、普通 HTTP(S) 下载、常见 `blob:` / `data:` 导出，文件位于 `Download/SillyTavern`。
-- 酒馆内部删除角色、聊天、世界书等操作由**远端网站**正常执行。
-- 导出方式因 SillyTavern 版本、扩展而异，不能保证所有非标准插件工作。HTTP 下载可能受特殊鉴权规则影响；Blob 单文件最多 1 GiB。
-- 禁用原生文字工具栏只影响**当前 WebView 的 Android 选择工具栏**，不修改系统键盘、系统剪贴板和酒馆服务器配置。
+### 用手机定位“Failed to fetch”
 
-## GitHub Actions 自动构建
+1. 进入酒馆，打开通知栏 → 软件设置 → **文件与导入导出 → 测试导出**。
+2. 打开 Android 文件管理器 → 下载 → SillyTavern，检查 `ST-Launcher-export-test.txt`，内容有“中文保存测试 OK”。
+3. **测试文件能保存，但某个预设导出仍失败：** 很可能是该插件在 iframe、ServiceWorker 或其它隔离上下文中生成文件，或使用非标准保存方式；请记录具体导出按钮/插件名称及其错误提示。
+4. **测试文件也不能保存：** 检查 Android System WebView 是否更新；确认酒馆已加载完成、存储空间足够，并记录安卓版本、错误信息。查看已绑定地址是否与网页主框架的实际 Origin 一致。
+5. 检查下载时，系统下载列表显示“已加入队列”**不等于下载成功**；应以文件管理器看到文件为准。
 
-已有 v0.1 仓库的升级方式：解压 v0.2 ZIP，把里面全部内容（**包含 `.github` 隐藏目录**）覆盖到 GitHub 仓库根目录并提交。
+**局限：** 安装脚本是在 WebView 的主框架页面加载后注入的。如果 URL 在注入前已经生成、或由跨域 iframe 创建、或扩展直接使用 File System Access API，可能无法捕获实际 Blob。此时 `fetch(blobURL)` 兜底仍可能失败；不能保证兼容所有版本及插件。
 
-新建仓库的方式：
+## 后台保活的真实机制
 
-1. 打开 https://github.com/new ，创建 `SillyTavern-Launcher` 仓库。
-2. 将本项目 ZIP **解压后**的文件上传到仓库根目录。请上传 `.github/workflows/build-apk.yml`，不要仅上传 ZIP 本身。
-3. 提交到 `main` 或 `master` 会自动触发工作流，也可在仓库 `Actions → Build Android APK → Run workflow` 手动启动。
-4. 成功后，打开该次运行，在页面底部 **Artifacts** 下载 `SillyTavernLauncher-v0.2.1-debug-APK`，解压得到 **`app-debug.apk`**。
-5. 将 APK 安装到 Android 10 及以上的手机即可。
+此启动器不会在后台独立运行 SillyTavern，也不代替酒馆服务器发送聊天请求。运行剧情时：
 
-构建版本：Android Gradle Plugin **8.9.2**、Gradle **8.11.1**、Java **17**、compileSdk **35**、targetSdk **35**、AndroidX WebKit **1.14.0**。Actions 安装固定 Gradle 版本，不依赖本地 wrapper。
+- **保活开关关：** Activity 切换到后台，使用正常 Android WebView 生命周期；网页可能继续运行一段时间，也可能被系统限制。
+- **保活开关开：** 用户在设置中启动 `ForegroundSessionService`，以 `specialUse` 前台服务类型发出状态通知（`START_STICKY`）。Android 通常会提高包含前台服务的应用进程优先级；新版后台时不主动调用 `WebView.onPause()`。同时设置中有“打开系统电池优化设置”入口供用户自行调节。
+- **切到其它 App / 熄屏：** 如果进程和 WebView 仍运行，可能继续收取流式数据、响应生成结束事件并提醒。但 Doze、厂商策略、Chromium 冻结、网络断开都可能造成延迟或失败。
+- **进程真的被系统杀掉：** `START_STICKY` 只表示系统有机会重建前台服务；不会自动恢复原来 WebView 的 JS 上下文/流式连接。**因此不能保证剧情后台生成绝不间断。** 服务端是否继续生成，取决于 SillyTavern 和你所用的 API 及代理配置。
+- **完成提醒：** 只有 WebView 的 `generation_ended` 等事件仍能被执行并通过同源消息桥通知应用时，才能响铃或震动。前台本地提醒，后台使用通知渠道，需授权通知权限。
 
-### 更新 APK 签名说明
+前台服务会提高电量消耗；Android 可能限制某些设备/版本的 `specialUse` 类型，不保证任何厂商都能无限期保活。**不持有 CPU 唤醒锁，也没有绕过系统强制停止。**
 
-当前 Github Actions 构建的是 Debug APK，其**临时 Debug 签名可能在不同工作流间变化**，覆盖安装出现“签名不一致”时，可能必须卸载旧 App（绑定地址和 App 中的 WebView 登录态可能丢失；服务端酒馆数据不受影响）。长期更新使用请自行为 Release APK 配置**固定且安全保存的签名密钥**。暂未自动发布 Release APK。
+Android 官方参考：[后台前台服务](https://developer.android.com/develop/background-work/services/fgs/changes)、[WebView 生命周期](https://developer.android.com/reference/android/webkit/WebView)、[屏幕挖孔](https://developer.android.com/develop/ui/views/layout/display-cutout)。
 
-## Android 后台与通知限制
+## 其它设置与隐私
 
-- Android 12+ 对后台启动前台服务有限制。本项目仅从用户打开 App 或在设置中开启时尝试启动；开机广播**不会直接启动前台服务**。
-- Android 14+ 采用 `specialUse` 前台服务类型及相关权限和 subtype 声明。该类型可能受到 Android / 设备限制；如向 Google Play 上架，需根据其最新政策提交用途审核，不保证获批。
-- Android 会限制后台 WebView 的脚本、定时器、网络与进程执行；前台服务**不等于**让服务器端生成或客户端监听永不中断。因此对于后台回复提醒，应在具体机型、酒馆版本、API 模式和电池管理环境中测试。
-- 如果关闭系统通知权限，后台回复提醒与快捷操作可能不可见。设置页提供「系统通知权限与提醒渠道」按钮。
-- 后台通知渠道一旦创建，用户可在**系统通知设置**里单独覆盖提示音/震动；Android 不允许 App 强行覆盖用户修改过的渠道设置。
+- 首次输入 `http://192.168.x.x:8000` 或 HTTP/HTTPS 域名并绑定；以后自动进入。通知栏可打开设置或注销绑定。
+- 显示：全屏沉浸模式可随时切换；会保护挖孔屏安全区，不改变 SillyTavern 网站自身排版。
+- 通知：回复完成提醒、提示音和震动都可以单独开关。系统通知权限及渠道配置仍受用户系统设置控制。
+- 输入：可禁用 Android 原生全选/粘贴菜单；该开关也可能影响酒馆输入框粘贴。
+- 存储：可立即清理网页资源缓存，或退出 App 时自动清缓存；**不主动清除 Cookie、localStorage、网站服务端数据**。下载文件也不会因清缓存而删除。
+- HTTP 明文访问有网络窃听风险，仅在可信局域网或 VPN 中使用；优先为公网站点配置 HTTPS。
+- 消息桥仅允许当前绑定站点的**同源主框架**发起文件导出/回复提醒，不允许任意第三方 frame 调用 Android 文件写入。
 
-参考文档：
-- SillyTavern 官方事件 API：https://docs.sillytavern.app/for-contributors/writing-extensions/
-- Android 前台服务类型：https://developer.android.com/develop/background-work/services/fgs/service-types
-- Android 通知权限：https://developer.android.com/develop/ui/views/notifications/notification-permission
+## 本地检查和仍需真机验证的内容
 
-## 安全和隐私
+本项目包含：
 
-- 只绑定自己信任的酒馆地址。绑定与设置均在本机，不上传到启动器开发者服务器。
-- WebView 的文件导出与完成事件桥接限制为绑定网站的**同源主框架**，不能用于跨域任意调用。
-- 不绕过 TLS 证书错误；默认禁止从 `file://` 打开任意本机文件及不安全文件跨域读取。
-- 局域网 HTTP 为明文传输，尽量只在可信网络 / VPN 下使用。
-- 「注销绑定」不清除服务器数据；「清理网页缓存」也不清理 Cookie/登录态。
-- 需要确认用户自定义 SillyTavern 插件是否存在额外的权限、登录或文件访问需求。
+- `tests/BoundUrlSmoke.java`：HTTP/HTTPS 绑定、同源判断。
+- `tests/reply-events-smoke.js`：正常结束、主动停止、重复渲染等 5 组事件。
+- `tests/blob-export-smoke.js`：完整虚拟 JS → Native 协议，覆盖测试 TXT、立即撤销 Blob URL、网页 DOM 点击、data URI。
+- `tests/MOBILE-QA.md`：真实手机上的导入 / 导出 / 下载 / 删除 / 挖孔屏 / 锁屏复测表。
 
-## 代码结构
+**这些测试不等于 Android 真机通过。** 已有 v0.2 真实运行但导出失败的反馈，所以 v0.3 的实际改善仍需要你验证；收到具体失败日志/插件信息后可以继续针对性修复。
 
-```text
-.github/workflows/build-apk.yml             GitHub 自动编译任务
-app/src/main/java/io/github/stlauncher/
-  MainActivity.java                          界面、设置页和酒馆 WebView
-  LauncherOptions.java                       各个功能选项本机持久化
-  BlockableWebView.java                      原生文本菜单拦截
-  ForegroundSessionService.java             用户主动开启的前台服务
-  NotificationHelper.java                    常驻通知及回复完成通知
-  ReplyNotifier.java                         前台铃声、震动
-  BlobExportManager.java                     Blob 分块写入下载目录
-  DownloadHandler.java                       普通 HTTP(S) 下载
-  BoundUrl.java                              网址规范化 / 同源校验
-  BootReceiver.java                          开机恢复普通绑定通知
-app/src/main/assets/
-  blob_export.js                             网页导出适配脚本
-  reply_events.js                            SillyTavern 生成完成事件监听
-```
-
-## 测试状态
-
-已在当前环境进行 JavaScript 语法检查、Android XML 解析检查及事件监听模拟测试。**当前环境未预装 Android SDK/Gradle 且无法访问外网，尚未真正执行 `assembleDebug`，也没有实机验证**。首次 GitHub Actions 编译和安装后，请重点检查：①地址绑定；②通知栏进入设置/注销；③全屏退出路径；④保活开关及系统权限；⑤普通/流式回复提醒；⑥角色卡导入、聊天导出；⑦缓存清除前后保持登录。
-
-MIT License。非 SillyTavern 官方产品。
-
-
-## 2026-11 GitHub Actions SDK 修复
-
-如果旧版工作流在 `Setup Android SDK` 报错 `Failed to find package 'tools'`，
-原因是 `android-actions/setup-android@v3` 仍尝试安装已移除的旧 SDK `tools` 包。
-本工程已将其更新为 `android-actions/setup-android@v4`，并明确设置
-`packages: 'platform-tools'`。无需修改 App 功能代码，也无需安装本地 Android SDK。
-
-将包括隐藏 `.github` 文件夹在内的项目文件上传到 GitHub 仓库根目录，
-然后在 Actions 里重新运行 `Build Android APK`。
-如果 SDK 安装通过但后续 Java 编译出现新报错，请提供该步骤日志。
-
-
-## 2026-11-12 SDK 旧 tools 包错误修复
-
-本版本 `.github/workflows/build-apk.yml` 不再使用 `android-actions/setup-android`，直接调用 GitHub `ubuntu-24.04` 运行器内置 SDK 的 `sdkmanager`，明确安装 `platform-tools`、`platforms;android-35`、`build-tools;35.0.0`，不会执行 `sdkmanager tools`。
-
-上传文件以后请在 GitHub 仓库提交新的 commit（确认根目录 `.github/workflows/build-apk.yml` 已被覆盖），到 **Actions > Build Android APK (SDK bypass fix)** 查看新运行记录。不要对以前失败记录点 **Re-run jobs**，它仍使用原始提交。首次运行可在 Actions 中选择 **Run workflow**。
-
-本地只验证了工作流 YAML 格式及项目资源文件，GitHub 上最终编译需以 Actions 运行结果为准。
-
-
-## v0.2.1：HTTP 酒馆连接修复
-
-上一版对未写 `http://` 的公共域名会自动补为 `https://`。本版改成：
-
-- 输入 `http://example.com:8000`：原样使用 HTTP，**绝不自动转换成 HTTPS**。
-- 输入 `example.com:8000`（省略协议）：默认 `http://example.com:8000`。
-- 输入 `https://example.com`：原样使用 HTTPS，绝不自动降级。
-- Manifest 保留 `usesCleartextTraffic=true`，并新增 `res/xml/network_security_config.xml`，显式允许用户配置的 HTTP 站点使用明文通信。因地址可为任何域名/IP，无法事先限定域名，请仅绑定可信来源。
-- **已绑定旧的 HTTPS 地址？** 进入通知栏 → 软件设置，当前网站区域点击「当前网站只支持 HTTP？点击切换」并确认，就会把已有 HTTPS 地址改成 HTTP 并保存。也可以注销绑定，重新输入完整的 `http://` 地址。
-- 如果明确输入 HTTP 后网页仍跳转至 HTTPS，则可能是服务器/反向代理发出的重定向，或者浏览器缓存的 HSTS 规则。这种情况需检查酒馆站点配置；启动器不会绕过服务器重定向或证书校验。
-- `http://` 不是加密协议，不建议在公网直接发送角色聊天内容、Cookie 或登录凭据。优先使用 HTTPS 或受信任的 VPN。
-- 修复包含在 `.github/workflows/build-apk.yml` 中，继续使用绕过旧版 SDK `tools` 的工作流。
+MIT License，非 SillyTavern 官方产品。
