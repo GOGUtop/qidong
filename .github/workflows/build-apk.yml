@@ -1,8 +1,8 @@
-name: Build Android APK
+name: Build Android APK (SDK bypass fix)
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: [main, master]
   pull_request:
   workflow_dispatch:
 
@@ -11,9 +11,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Setup Java 17
@@ -22,11 +22,33 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      # GitHub-hosted Ubuntu already includes the Android SDK and sdkmanager.
+      # Avoid android-actions/setup-android entirely because old releases try
+      # to install Google's removed, deprecated SDK package called "tools".
+      - name: Install Android SDK 35 (no deprecated tools)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "SDK bypass workflow: Android SDK 35"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -z "$sdk_root" ]]; then
+            echo 'Android SDK root is missing on this runner.' >&2
+            exit 1
+          fi
+          sdkmanager_bin="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdkmanager_bin" ]]; then
+            sdkmanager_bin="$(command -v sdkmanager || true)"
+          fi
+          if [[ -z "$sdkmanager_bin" || ! -x "$sdkmanager_bin" ]]; then
+            echo 'sdkmanager is not available on this runner.' >&2
+            exit 1
+          fi
+          "$sdkmanager_bin" --version
+          "$sdkmanager_bin" --install 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
+          echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
 
       - name: Setup Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
@@ -34,7 +56,10 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Check reply events JavaScript
-        run: node --check app/src/main/assets/reply_events.js && node --check app/src/main/assets/blob_export.js && node tests/reply-events-smoke.js
+        run: |
+          node --check app/src/main/assets/reply_events.js
+          node --check app/src/main/assets/blob_export.js
+          node tests/reply-events-smoke.js
 
       - name: Check bound-URL handling
         run: |
