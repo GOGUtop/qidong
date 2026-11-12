@@ -114,6 +114,11 @@ public final class MainActivity extends Activity {
         setContentView(host);
         configureInsets();
 
+        // A fresh Activity cannot infer a prior WebView generation's live state.
+        LauncherOptions.prefs(this).edit()
+                .putBoolean(LauncherOptions.GENERATING_NOW, false)
+                .putLong(LauncherOptions.GENERATION_EVENT_AT, SystemClock.elapsedRealtime())
+                .apply();
         boundUrl = LauncherOptions.prefs(this).getString(KEY_URL, null);
         if (boundUrl == null || boundUrl.isEmpty()) {
             showBindingScreen();
@@ -355,6 +360,14 @@ public final class MainActivity extends Activity {
                         if (raw == null || raw.length() > 256) return;
                         try {
                             String type = new JSONObject(raw).optString("type", "");
+                            if ("generation_started".equals(type)
+                                    || "generation_idle".equals(type)) {
+                                boolean generating = "generation_started".equals(type);
+                                LauncherOptions.prefs(this).edit()
+                                        .putBoolean(LauncherOptions.GENERATING_NOW, generating)
+                                        .putLong(LauncherOptions.GENERATION_EVENT_AT,
+                                                SystemClock.elapsedRealtime()).apply();
+                            }
                             if ("reply_finished".equals(type)) runOnUiThread(() -> {
                                 long now = SystemClock.elapsedRealtime();
                                 if (now - lastAlertTime > 1300) {
@@ -522,7 +535,7 @@ public final class MainActivity extends Activity {
         TextView subtitle = text("沉浸式阅读 · 文件管理 · 后台提醒", 13, MUTED, false);
         subtitle.setPadding(0, dp(8), 0, 0);
         hero.addView(subtitle);
-        TextView version = text("VERSION  0.3.0      •      CUSTOM WEBVIEW", 10, ACCENT, true);
+        TextView version = text("VERSION  0.4.0      •      CUSTOM WEBVIEW", 10, ACCENT, true);
         version.setPadding(0, dp(22), 0, 0);
         hero.addView(version);
 
@@ -563,6 +576,17 @@ public final class MainActivity extends Activity {
                     else stopSessionService();
                     NotificationHelper.show(this);
                 });
+        separator(keepCard);
+        toggleRow(keepCard, "灵动岛媒体卡片 · 实验性",
+                "模拟系统媒体状态，显示酒馆运行/生成中和会话计时进度。" +
+                "不播放音视频、不抢音频焦点；须开启上方保活，显示效果取决于手机系统。",
+                LauncherOptions.MEDIA_CARD, () -> {
+                    if (LauncherOptions.enabled(this, LauncherOptions.KEEP_ALIVE)) {
+                        startSessionService();
+                    } else if (LauncherOptions.enabled(this, LauncherOptions.MEDIA_CARD)) {
+                        toast("请先开启上方的增强后台保活，否则媒体卡片不会出现");
+                    }
+                });
         TextView battery = outlinedButton("打开系统电池优化设置  ↗");
         LinearLayout.LayoutParams batteryLp = new LinearLayout.LayoutParams(-1, dp(46));
         batteryLp.topMargin = dp(12);
@@ -571,8 +595,10 @@ public final class MainActivity extends Activity {
             try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); }
             catch (Exception e) { openAppInfo(); }
         });
-        TextView keepNote = text("工作方式：只保留 App 进程的较高优先级，不接管酒馆 API、" +
-                "不维持独立网络连接。锁屏、省电模式、厂商限制可能暂停网页生成或通知。", 11, MUTED, false);
+        TextView keepNote = text("保活本体仍是 Android 前台服务；媒体卡片仅作状态展示。" +
+                "进度表示本次后台会话已运行的时间，每小时循环，并非回复生成比例。" +
+                "同时使用小红书视频时，系统可能只展示一个媒体卡片。" +
+                "系统仍可能冻结 WebView 或中断网络连接。", 11, MUTED, false);
         keepNote.setPadding(0, dp(12), 0, 0);
         keepNote.setLineSpacing(dp(3), 1f);
         keepCard.addView(keepNote);

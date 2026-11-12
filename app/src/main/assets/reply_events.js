@@ -32,6 +32,7 @@
     eventSource.on(events.GENERATION_STARTED, () => {
       active = true;
       received = ended = stopped = notified = false;
+      emit('generation_started');
     });
     eventSource.on(events.MESSAGE_RECEIVED, () => {
       if (active) { received = true; maybeDone(); }
@@ -42,11 +43,15 @@
       });
     }
     if (events.GENERATION_STOPPED) {
-      eventSource.on(events.GENERATION_STOPPED, () => { stopped = true; active = false; });
+      eventSource.on(events.GENERATION_STOPPED, () => {
+        stopped = true; active = false;
+        emit('generation_idle');
+      });
     }
     eventSource.on(events.GENERATION_ENDED, () => {
       if (!active || stopped) return;
       ended = true;
+      emit('generation_idle');
       setTimeout(maybeDone, 400); // allow final streaming render to be emitted
       setTimeout(() => { active = false; }, 2500);
     });

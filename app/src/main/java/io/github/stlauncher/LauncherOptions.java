@@ -7,6 +7,9 @@ import android.content.SharedPreferences;
 final class LauncherOptions {
     static final String FULL_SCREEN = "full_screen";
     static final String KEEP_ALIVE = "keep_alive";
+    static final String MEDIA_CARD = "media_card";
+    static final String GENERATING_NOW = "generation_active";
+    static final String GENERATION_EVENT_AT = "generation_event_at";
     static final String REPLY_ALERTS = "reply_alerts";
     static final String SOUND = "reply_sound";
     static final String VIBRATE = "reply_vibrate";

@@ -34,6 +34,10 @@ function run(sequence, expectedAlerts) {
   assert.equal(outgoing.filter(type => type === 'observer_ready').length, 1);
   assert.equal(outgoing.filter(type => type === 'reply_finished').length, expectedAlerts,
     `alerts for ${sequence.join(' -> ')}`);
+  assert.equal(outgoing.filter(type => type === 'generation_started').length,
+    sequence.filter(x => x === 'GENERATION_STARTED').length);
+  assert.equal(outgoing.filter(type => type === 'generation_idle').length,
+    (sequence.includes('GENERATION_STOPPED') ? 1 : sequence.filter(x => x === 'GENERATION_ENDED').length));
 }
 run(['GENERATION_STARTED','MESSAGE_RECEIVED','GENERATION_ENDED'],1);
 run(['GENERATION_STARTED','GENERATION_ENDED'],0);

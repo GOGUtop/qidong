@@ -1,8 +1,22 @@
-# SillyTavern Launcher v0.3.0
+# SillyTavern Launcher v0.4.0
 
 非官方 Android 10+ SillyTavern 网页启动器，Java + Android System WebView，**不包含 SillyTavern 服务端**。首启绑定 HTTP/HTTPS 酒馆网站；以后打开 App 直接进入该地址。使用 GitHub Actions 构建 Debug APK。
 
-> 本版针对实机反馈的「保存文件失败：Failed to fetch」及挖孔屏顶部遮挡改进。**已运行本地 JavaScript 模拟测试，但没有在本环境实际编译 Android APK 或验证你的酒馆插件；对于某些非标准导出方式无法保证完全兼容。**
+> v0.4 延续 v0.3 的文件、挖孔屏修复，并增加可选系统媒体状态卡片。原 v0.3 针对实机反馈的「保存文件失败：Failed to fetch」及挖孔屏顶部遮挡改进。**已运行本地 JavaScript 模拟测试，但没有在本环境实际编译 Android APK 或验证你的酒馆插件；对于某些非标准导出方式无法保证完全兼容。**
+
+
+## v0.4 新增：系统媒体卡片 / 灵动岛展示（实验性，默认关闭）
+
+这是**媒体会话状态卡片**，不是后台播放音乐/视频。打开「增强后台保活」后，再打开「灵动岛媒体卡片 · 实验性」即可尝试显示系统媒体通知。默认不播放音频、不播放视频、不请求音频焦点，不会主动抢占正在播放的小红书视频的声音。应用使用 `android.media.session.MediaSession` 和 `Notification.MediaStyle` 向系统报告状态，**不把前台服务伪装为 `mediaPlayback` 类型**，原前台服务仍为 `specialUse`。
+
+- 通知显示「后台会话运行中」或「剧情回复生成中」；后者来自 SillyTavern 事件监听，若插件不发事件会继续显示运行中。
+- 通知/系统媒体卡片的**进度是本次会话运行时长（以 60 分钟为一个循环）**，不是模型生成百分比或剩余时间，且重启服务后从零开始。每 15 秒刷新文字和状态。
+- 可以从媒体卡片点开设置，或按「关闭媒体卡片」/媒体暂停键关闭展示，**不影响原本的后台保活开关**。
+- Android 13+ 媒体控制中心、部分厂商灵动岛是否显示、优先展示哪个应用，完全取决于 Android 版本与 OEM。即使手机支持灵动岛，**不保证一定出现，不保证与小红书视频的媒体卡片同时出现**。没有真实媒体播放时，一些系统不会把本卡片当成正在播放的音视频。
+- 本模式只是显示层增强，**不会额外提升 WebView 的网络连接可靠性**，不会承诺锁屏后剧情不会断线。系统仍可冻住 WebView / 终止进程；长时间使用略增电量消耗。
+- 不申请 `FOREGROUND_SERVICE_MEDIA_PLAYBACK`，因为这里没有真正播放音视频；如果以后确实增加音频朗读功能，才需要另行按平台要求添加音频播放服务及焦点管理。
+
+**手机测试**：从通知栏 → 软件设置打开两个开关，发起一次剧情生成，确认媒体卡片文字与会话计时变化；切到小红书播放视频检查其音频是否正常；锁屏后检查系统有没有隐藏媒体卡片，以及回复通知是否仍能到达。不要以卡片可见当作 WebView 持续生成的证据。
 
 ## 新功能 / 修复
 
@@ -22,9 +36,9 @@
 ## 安装、更新与自动编译
 
 1. 下载项目 ZIP，**解压**，将里面所有项目文件（包含隐藏的 `.github` 目录）上传到 GitHub 仓库根目录，覆盖旧版。
-2. Commit 至 `main` 或 `master`，打开仓库 **Actions → Build Android APK (v0.3)**，选择这次**新提交**对应的运行（不要在旧失败任务上使用 Re-run jobs）。
+2. Commit 至 `main` 或 `master`，打开仓库 **Actions → Build Android APK (v0.4)**，选择这次**新提交**对应的运行（不要在旧失败任务上使用 Re-run jobs）。
 3. 依次应经过 `Install Android SDK 35 (no deprecated tools)`、`Test WebView JavaScript and native export protocol`、`Compile installable debug APK`。
-4. 成功后在 **Artifacts** 下载 `SillyTavernLauncher-v0.3.0-debug-APK`，解压获得 `app-debug.apk`。
+4. 成功后在 **Artifacts** 下载 `SillyTavernLauncher-v0.4.0-debug-APK`，解压获得 `app-debug.apk`。
 
 工程使用 JDK 17、Android Gradle Plugin 8.9.2、Gradle 8.11.1、compileSdk / targetSdk 35、AndroidX WebKit 1.14.0，最低 API 29（Android 10）。工作流绕过旧版 SDK `tools` 安装故障。
 
@@ -79,10 +93,11 @@ Android 官方参考：[后台前台服务](https://developer.android.com/develo
 本项目包含：
 
 - `tests/BoundUrlSmoke.java`：HTTP/HTTPS 绑定、同源判断。
-- `tests/reply-events-smoke.js`：正常结束、主动停止、重复渲染等 5 组事件。
+- `tests/reply-events-smoke.js`：正常结束、主动停止、重复渲染等 5 组事件，并检查媒体状态事件。
+- `tests/media-card-smoke.js`：媒体会话、系统进度卡及不假冒媒体前台服务类型的静态检查。
 - `tests/blob-export-smoke.js`：完整虚拟 JS → Native 协议，覆盖测试 TXT、立即撤销 Blob URL、网页 DOM 点击、data URI。
 - `tests/MOBILE-QA.md`：真实手机上的导入 / 导出 / 下载 / 删除 / 挖孔屏 / 锁屏复测表。
 
-**这些测试不等于 Android 真机通过。** 已有 v0.2 真实运行但导出失败的反馈，所以 v0.3 的实际改善仍需要你验证；收到具体失败日志/插件信息后可以继续针对性修复。
+**这些测试不等于 Android 真机通过。** 已有 v0.2 真实运行但导出失败的反馈，所以 v0.3/v0.4 的实际改善仍需要你验证；收到具体失败日志/插件信息后可以继续针对性修复。
 
 MIT License，非 SillyTavern 官方产品。
