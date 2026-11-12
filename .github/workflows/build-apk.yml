@@ -1,4 +1,4 @@
-name: Build Android APK (v0.3)
+name: Build Android APK (v0.4)
 
 on:
   push:
@@ -60,6 +60,7 @@ jobs:
           node --check app/src/main/assets/reply_events.js
           node --check app/src/main/assets/blob_export.js
           node tests/reply-events-smoke.js
+          node tests/media-card-smoke.js
           node tests/blob-export-smoke.js
 
       - name: Check bound-URL handling
@@ -74,7 +75,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SillyTavernLauncher-v0.3.0-debug-APK
+          name: SillyTavernLauncher-v0.4.0-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
